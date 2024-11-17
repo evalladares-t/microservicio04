@@ -6,9 +6,9 @@ import lombok.Getter;
 @Getter
 @AllArgsConstructor
 public enum AccountType {
-  AHORRO("001", "SavingAccount"),
-  CORRIENTE("002", "CurrentAccount"),
-  PLAZO_FIJO("003", "FixedTerm");
+  SAVING("001", "AHORRO"),
+  CURRENT("002", "CORRIENTE"),
+  FIXED_TERM("003", "PLAZO FIJO");
 
   private final String code;
   private final String description;

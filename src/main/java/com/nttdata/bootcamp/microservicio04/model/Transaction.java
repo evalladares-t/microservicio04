@@ -8,7 +8,7 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.UUID;
 
 @Getter
@@ -20,7 +20,7 @@ public class Transaction {
   @Id
   private String id = UUID.randomUUID().toString();
   private BigDecimal amount;
-  private LocalDateTime date;
+  private LocalDate created;
   private TransactionType transactionType;
   private String accountId;
   private String creditId;

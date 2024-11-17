@@ -10,5 +10,5 @@ import java.time.LocalDateTime;
 @Repository
 public interface TransactionRepository extends ReactiveMongoRepository<Transaction,String> {
 
-  Mono<Long> countByDateBetween(LocalDateTime start, LocalDateTime end);
+  Mono<Long> countByCreatedBetween(LocalDateTime start, LocalDateTime end);
 }

@@ -12,6 +12,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
 
@@ -20,7 +21,6 @@ import java.time.YearMonth;
 public class TransactionServiceImpl implements TransactionService {
 
   private TransactionRepository transactionRepository;
-
   private WebClient webClientConfig;
 
   public TransactionServiceImpl (TransactionRepository transactionRepository, WebClient webClientConfig) {
@@ -31,7 +31,6 @@ public class TransactionServiceImpl implements TransactionService {
   public Mono<Transaction> create(Transaction transaction) {
     String accountId = transaction.getAccountId();
     //String creditId = transaction.getCreditId();
-
     if (accountId.isBlank()) {
       log.warn("Account ID or Credit ID is empty");
       return Mono.empty();
@@ -40,6 +39,7 @@ public class TransactionServiceImpl implements TransactionService {
     return findByAccountID(accountId)
             .flatMap(account -> {
               transaction.setAccountId(account.getId());
+              transaction.setCreated(LocalDate.now());
               return validateTransactionWithAccount(account, transaction);
             })
             //.switchIfEmpty(findByCreditIDService(creditID));
@@ -54,14 +54,20 @@ public class TransactionServiceImpl implements TransactionService {
     LocalDateTime end = mesAnioActual.atEndOfMonth().atTime(23, 59, 59);
 
     // Contar documentos en el rango del mes y año actuales
-    return transactionRepository.countByDateBetween(start, end).map(count -> transactionLimit > count);
+    return transactionRepository.countByCreatedBetween(start, end).map(count -> transactionLimit > count);
+  }
+
+  private Mono<Boolean>  isDateTransactionAccountAvailable (Integer dateAllowedTransaction) {
+    LocalDate dateCompletedNow = LocalDate.now();
+    return Mono.just(dateCompletedNow.getDayOfMonth() == dateAllowedTransaction);
+
   }
 
   private Mono<Transaction> validateTransactionWithAccount(Account account, Transaction transaction) {
     String accountType = account.getAccountType().getDescription();
     if(account.getActive() && ((account.getAmountAvailable().add(transaction.getAmount())).compareTo(BigDecimal.ZERO) >= 0)){
       // Si la cuenta es de ahorro
-      if (AccountType.AHORRO.getDescription().equals(accountType)) {
+      if (AccountType.SAVING.getDescription().equals(accountType)) {
         return isTransactionAccountAvailable(account.getTransactionLimit())
                 .flatMap(allowed -> {
                   if (allowed) {
@@ -72,7 +78,7 @@ public class TransactionServiceImpl implements TransactionService {
                     return Mono.empty();
                   }
                 });
-      } else if (AccountType.CORRIENTE.getDescription().equals(accountType)){
+      } else if (AccountType.CURRENT.getDescription().equals(accountType)){
         updateAccountAmount(account.getId(), account.getAmountAvailable().add(transaction.getAmount()));
         return transactionRepository.insert(transaction);
       }
@@ -80,8 +86,16 @@ public class TransactionServiceImpl implements TransactionService {
         return isTransactionAccountAvailable(1)
                 .flatMap(allowed -> {
                   if (allowed) {
-                    updateAccountAmount(account.getId(), account.getAmountAvailable().add(transaction.getAmount()));
-                    return transactionRepository.insert(transaction);
+                    return isDateTransactionAccountAvailable(account.getDateAllowedTransaction())
+                            .flatMap(allowedDate -> {
+                              if (allowedDate) {
+                                updateAccountAmount(account.getId(), account.getAmountAvailable().add(transaction.getAmount()));
+                                return transactionRepository.insert(transaction);
+                              } else {
+                                log.warn("Transaction not allowed for this account");
+                                return Mono.empty();
+                              }
+                            });
                   } else {
                     log.warn("Transaction not allowed for this account");
                     return Mono.empty();
