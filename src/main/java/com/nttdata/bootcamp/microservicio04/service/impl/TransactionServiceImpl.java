@@ -6,13 +6,18 @@ import com.nttdata.bootcamp.microservicio04.model.Transaction;
 import com.nttdata.bootcamp.microservicio04.model.dto.AccountUpdateDto;
 import com.nttdata.bootcamp.microservicio04.repository.TransactionRepository;
 import com.nttdata.bootcamp.microservicio04.service.TransactionService;
+import com.nttdata.bootcamp.microservicio04.utils.constant.ErrorCode;
+import com.nttdata.bootcamp.microservicio04.utils.exception.OperationNoCompletedException;
+import java.lang.reflect.Field;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.util.ReflectionUtils;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 @Service
@@ -160,5 +165,73 @@ public class TransactionServiceImpl implements TransactionService {
         .uri(uriBuilder -> uriBuilder.path("v1/credit/" + id).build())
         .retrieve()
         .bodyToMono(Account.class);
+  }
+
+  @Override
+  public Mono<Transaction> findById(String transactionId) {
+    return transactionRepository.findById(transactionId);
+  }
+
+  @Override
+  public Flux<Transaction> findAll() {
+    return transactionRepository.findAll();
+  }
+
+  @Override
+  public Mono<Transaction> update(Transaction transaction, String transactionId) {
+    log.info("Update a account in the service.");
+    return transactionRepository
+        .findById(transactionId)
+        .flatMap(
+            customerDB -> {
+              transaction.setId(customerDB.getId());
+              return transactionRepository.save(transaction);
+            })
+        .switchIfEmpty(
+            Mono.error(
+                new OperationNoCompletedException(
+                    ErrorCode.TRANSACTION_NO_UPDATE.getCode(),
+                    ErrorCode.TRANSACTION_NO_UPDATE.getMessage())));
+  }
+
+  @Override
+  public Mono<Transaction> change(Transaction transaction, String transactionId) {
+    return transactionRepository
+        .findById(transactionId)
+        .flatMap(
+            entidadExistente -> {
+              // Iterar sobre los campos del objeto entidadExistente
+              Field[] fields = transaction.getClass().getDeclaredFields();
+              for (Field field : fields) {
+                if ("id".equals(field.getName())) {
+                  continue; // Saltar el campo 'id'
+                }
+                field.setAccessible(true); // Para acceder a campos privados
+                try {
+                  // Verificar si el valor del campo en entidadParcial no es null
+                  Object value = field.get(transaction);
+                  if (value != null) {
+                    // Actualizar el campo correspondiente en entidadExistente
+                    ReflectionUtils.setField(field, entidadExistente, value);
+                  }
+                } catch (IllegalAccessException e) {
+                  e.printStackTrace(); // Manejo de errores si hay problemas con la reflexión
+                }
+              }
+              // Guardar la entidad modificada
+              return transactionRepository.save(entidadExistente);
+            })
+        .switchIfEmpty(
+            Mono.error(
+                new OperationNoCompletedException(
+                    ErrorCode.TRANSACTION_NO_UPDATE.getCode(),
+                    ErrorCode.TRANSACTION_NO_UPDATE.getMessage())));
+  }
+
+  @Override
+  public Mono<Transaction> remove(String transactionId) {
+    return transactionRepository
+        .findById(transactionId)
+        .flatMap(p -> transactionRepository.deleteById(p.getId()).thenReturn(p));
   }
 }
