@@ -6,5 +6,4 @@ import reactor.core.publisher.Mono;
 public interface TransactionService {
 
   Mono<Transaction> create(Transaction transaction);
-
 }

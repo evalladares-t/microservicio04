@@ -12,5 +12,4 @@ public enum AccountType {
 
   private final String code;
   private final String description;
-
 }

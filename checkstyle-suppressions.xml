@@ -1,0 +1,13 @@
+<!DOCTYPE suppressions PUBLIC
+        "-//Checkstyle//DTD Suppressions 1.2//EN"
+        "https://checkstyle.org/dtds/suppressions_1_2.dtd">
+
+<suppressions>
+
+    <!-- <suppress checks="LITERAL_SWITCH" /> -->
+
+    <!-- Suprimir reglas de Javadoc para todos los métodos -->
+    <suppress checks="JavadocMethod" />
+    <!-- Suprimir reglas de Javadoc solo para clases específicas -->
+    <suppress checks="JavadocType"/>
+</suppressions>

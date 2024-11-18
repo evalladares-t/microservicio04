@@ -14,5 +14,4 @@ public class DocumentIdentity {
   private String number;
   private String typeDocumentIdentity;
   private boolean isActive;
-
 }

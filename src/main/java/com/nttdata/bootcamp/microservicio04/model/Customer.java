@@ -17,5 +17,4 @@ public class Customer {
   private String lastName;
   private DocumentIdentity documentIdentity;
   private boolean isActive;
-
 }

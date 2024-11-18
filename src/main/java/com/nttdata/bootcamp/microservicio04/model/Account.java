@@ -1,13 +1,12 @@
 package com.nttdata.bootcamp.microservicio04.model;
 
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-
-import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.List;
 
 @Getter
 @Setter
@@ -25,7 +24,6 @@ public class Account {
   private Double commissionRate;
   private Boolean active;
   private Integer dateAllowedTransaction;
-  private List<String> holders = new ArrayList<>();  // Lista de titulares
+  private List<String> holders = new ArrayList<>(); // Lista de titulares
   private List<String> authorizedSigners = new ArrayList<>(); // Lista de Firmantes autorizados
-
 }
