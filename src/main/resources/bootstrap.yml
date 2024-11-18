@@ -1,9 +1,4 @@
 
-application:
-  endpoints:
-    url: http://localhost:8082/api/
-
-spring:
   application:
     name: microservicio04
   cloud:

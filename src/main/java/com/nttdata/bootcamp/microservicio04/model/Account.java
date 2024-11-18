@@ -21,7 +21,7 @@ public class Account {
   private String currency;
   private BigDecimal amountAvailable;
   private Integer transactionLimit;
-  private Double commissionRate;
+  private BigDecimal commissionRate;
   private Boolean active;
   private Integer dateAllowedTransaction;
   private List<String> holders = new ArrayList<>(); // Lista de titulares
