@@ -76,4 +76,16 @@ public class TransactionController {
         .flatMap(account -> Mono.just(ResponseEntity.ok(account)))
         .switchIfEmpty(Mono.just(ResponseEntity.notFound().build()));
   }
+
+  @GetMapping({"/account/{id}/", "/account/{id}"})
+  public Flux<Transaction> findByAccountId(@PathVariable("id") String transactionId) {
+    log.info("Find an accounts by customerId in the controller.");
+    return transactionService.findByAccountId(transactionId);
+  }
+
+  @GetMapping({"/credit/{id}/", "/credit/{id}"})
+  public Flux<Transaction> findByCreditId(@PathVariable("id") String transactionId) {
+    log.info("Find an credit by customerId in the controller.");
+    return transactionService.findByCreditId(transactionId);
+  }
 }

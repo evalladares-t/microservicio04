@@ -17,4 +17,8 @@ public interface TransactionService {
   Mono<Transaction> change(Transaction transaction, String transactionId);
 
   Mono<Transaction> remove(String transactionId);
+
+  Flux<Transaction> findByAccountId(String id);
+
+  Flux<Transaction> findByCreditId(String id);
 }

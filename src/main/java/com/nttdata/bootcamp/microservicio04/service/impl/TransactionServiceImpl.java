@@ -2,8 +2,10 @@ package com.nttdata.bootcamp.microservicio04.service.impl;
 
 import com.nttdata.bootcamp.microservicio04.model.Account;
 import com.nttdata.bootcamp.microservicio04.model.AccountType;
+import com.nttdata.bootcamp.microservicio04.model.Credit;
 import com.nttdata.bootcamp.microservicio04.model.Transaction;
 import com.nttdata.bootcamp.microservicio04.model.dto.AccountUpdateDto;
+import com.nttdata.bootcamp.microservicio04.model.dto.CreditUpdateDto;
 import com.nttdata.bootcamp.microservicio04.repository.TransactionRepository;
 import com.nttdata.bootcamp.microservicio04.service.TransactionService;
 import com.nttdata.bootcamp.microservicio04.utils.constant.ErrorCode;
@@ -13,6 +15,9 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.util.ReflectionUtils;
@@ -25,33 +30,60 @@ import reactor.core.publisher.Mono;
 public class TransactionServiceImpl implements TransactionService {
 
   private TransactionRepository transactionRepository;
-  private WebClient webClientConfig;
+  private WebClient webClientAccount;
+  private WebClient webClientCredit;
 
   public TransactionServiceImpl(
-      TransactionRepository transactionRepository, WebClient webClientConfig) {
+      TransactionRepository transactionRepository, WebClient webClientAccount, WebClient webClientCredit) {
     this.transactionRepository = transactionRepository;
-    this.webClientConfig = webClientConfig;
+    this.webClientAccount = webClientAccount;
+    this.webClientCredit = webClientCredit;
   }
 
   @Override
   public Mono<Transaction> create(Transaction transaction) {
-    String accountId = transaction.getAccountId();
-    // String creditId = transaction.getCreditId();
-    if (accountId.isBlank()) {
-      log.warn("Account ID is empty");
-      return Mono.empty();
-    }
 
     if (transaction.getAmount().compareTo(BigDecimal.ZERO) == 0) {
       log.warn("Transaction amount must be different from zero");
       return Mono.empty();
     }
 
-    return findByAccountId(accountId)
+    Map<String, Function<Transaction, Flux<Transaction>>> productProcessors =
+        Map.of(
+            "accountId",
+            tx -> createTransactionAccount(tx, tx.getAccountId()),
+            "creditId",
+            tx -> createTransactionCredit(tx, tx.getCreditId()));
+    List<Map.Entry<String, Function<Transaction, Flux<Transaction>>>> validProducts =
+        productProcessors.entrySet().stream()
+            .filter(entry -> isFieldNonNull(transaction, entry.getKey()))
+            .toList();
+
+    if (validProducts.size() != 1) {
+      return Mono.error(new IllegalArgumentException("Exactly one product must be non-null"));
+    }
+
+    return validProducts.get(0).getValue().apply(transaction).next();
+  }
+
+  private Flux<Transaction> createTransactionAccount(Transaction transaction, String accountId) {
+    return findAccount(accountId)
         .flatMap(
             account -> {
               setDefaultTransactionProperties(transaction, account);
               return validateTransactionWithAccount(account, transaction);
+            })
+        // .switchIfEmpty(findByCreditIdService(creditID));
+        .doOnError(e -> log.error("Error creating transaction: ", e));
+  }
+
+  private Flux<Transaction> createTransactionCredit(Transaction transaction, String creditId) {
+    return findCredit(creditId)
+        .flatMap(
+            credit -> {
+              updateCreditAmount(
+                      credit.getId(), credit.getAmountAvailable().add(transaction.getAmount()));
+              return transactionRepository.insert(transaction);
             })
         // .switchIfEmpty(findByCreditIdService(creditID));
         .doOnError(e -> log.error("Error creating transaction: ", e));
@@ -73,6 +105,18 @@ public class TransactionServiceImpl implements TransactionService {
   private Mono<Boolean> isDateTransactionAccountAvailable(Integer dateAllowedTransaction) {
     LocalDate dateCompletedNow = LocalDate.now();
     return Mono.just(dateCompletedNow.getDayOfMonth() == dateAllowedTransaction);
+  }
+
+  private Mono<Transaction> validateTransactionWithCredit(Credit credit, Transaction transaction) {
+    if (credit.getActive()
+        && ((credit.getAmountAvailable().add(transaction.getAmount())).compareTo(BigDecimal.ZERO)
+            >= 0)) {
+      updateCreditAmount(
+              credit.getId(), credit.getAmountAvailable().add(transaction.getAmount()));
+      return transactionRepository.insert(transaction);
+
+    }
+    return Mono.just(new Transaction());
   }
 
   private Mono<Transaction> validateTransactionWithAccount(
@@ -133,38 +177,16 @@ public class TransactionServiceImpl implements TransactionService {
     updateByAccountId(accountId, accountUpdateDto).subscribe();
   }
 
+  public void updateCreditAmount(String creditId, BigDecimal ammount) {
+    CreditUpdateDto creditUpdateDto = new CreditUpdateDto();
+    creditUpdateDto.setAmountAvailable(ammount);
+    updateByCreditId(creditId, creditUpdateDto).subscribe();
+  }
+
   private void setDefaultTransactionProperties(Transaction transaction, Account account) {
     transaction.setAccountId(account.getId());
     transaction.setCreated(LocalDate.now());
     transaction.setActive(true);
-  }
-
-  public Mono<Account> findByAccountId(String id) {
-    log.info("Getting client with id: [{}]", id);
-    return this.webClientConfig
-        .get()
-        .uri(uriBuilder -> uriBuilder.path("v1/account/" + id).build())
-        .retrieve()
-        .bodyToMono(Account.class);
-  }
-
-  public Mono<Account> updateByAccountId(String id, AccountUpdateDto accountUpdateDto) {
-    log.info("Update account with id: [{}]", id);
-    return this.webClientConfig
-        .patch()
-        .uri(uriBuilder -> uriBuilder.path("v1/account/" + id).build())
-        .bodyValue(accountUpdateDto)
-        .retrieve()
-        .bodyToMono(Account.class);
-  }
-
-  public Mono<Account> findByCreditIdService(String id) {
-    log.info("Getting client with id: [{}]", id);
-    return this.webClientConfig
-        .get()
-        .uri(uriBuilder -> uriBuilder.path("v1/credit/" + id).build())
-        .retrieve()
-        .bodyToMono(Account.class);
   }
 
   @Override
@@ -233,5 +255,61 @@ public class TransactionServiceImpl implements TransactionService {
     return transactionRepository
         .findById(transactionId)
         .flatMap(p -> transactionRepository.deleteById(p.getId()).thenReturn(p));
+  }
+
+  @Override
+  public Flux<Transaction> findByAccountId(String id) {
+    return transactionRepository.findByAccountId(id);
+  }
+
+  @Override
+  public Flux<Transaction> findByCreditId(String id) {
+    return transactionRepository.findByCreditId(id);
+  }
+
+  private boolean isFieldNonNull(Transaction transaction, String fieldName) {
+    try {
+      Field field = Transaction.class.getDeclaredField(fieldName);
+      field.setAccessible(true);
+      return field.get(transaction) != null;
+    } catch (NoSuchFieldException | IllegalAccessException e) {
+      throw new RuntimeException("Error accessing field: " + fieldName, e);
+    }
+  }
+
+  public Flux<Account> findAccount(String id) {
+    return this.webClientAccount
+        .get()
+        .uri(uriBuilder -> uriBuilder.path("v1/account/" + id).build())
+        .retrieve()
+        .bodyToFlux(Account.class);
+  }
+
+  public Flux<Credit> findCredit(String id) {
+    return this.webClientCredit
+        .get()
+        .uri(uriBuilder -> uriBuilder.path("v1/credit/" + id).build())
+        .retrieve()
+        .bodyToFlux(Credit.class);
+  }
+
+  public Mono<Account> updateByAccountId(String id, AccountUpdateDto accountUpdateDto) {
+    log.info("Update account with id: [{}]", id);
+    return this.webClientAccount
+            .patch()
+            .uri(uriBuilder -> uriBuilder.path("v1/account/" + id).build())
+            .bodyValue(accountUpdateDto)
+            .retrieve()
+            .bodyToMono(Account.class);
+  }
+
+  public Mono<Credit> updateByCreditId(String id, CreditUpdateDto creditUpdateDto) {
+    log.info("Update account with id: [{}]", id);
+    return this.webClientCredit
+            .patch()
+            .uri(uriBuilder -> uriBuilder.path("v1/credit/" + id).build())
+            .bodyValue(creditUpdateDto)
+            .retrieve()
+            .bodyToMono(Credit.class);
   }
 }

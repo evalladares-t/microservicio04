@@ -21,12 +21,12 @@ import reactor.core.publisher.Mono;
 @Slf4j
 public class ScheduledTasksService {
 
-  private final WebClient webClientConfig;
+  private final WebClient webClientAccount;
 
   private final TransactionRepository transactionRepository;
 
-  public ScheduledTasksService(TransactionRepository transactionRepository, WebClient webClient) {
-    this.webClientConfig = webClient;
+  public ScheduledTasksService(TransactionRepository transactionRepository, WebClient webClientAccount) {
+    this.webClientAccount = webClientAccount;
     this.transactionRepository = transactionRepository;
   }
 
@@ -62,7 +62,7 @@ public class ScheduledTasksService {
 
   public Flux<Account> findAllAccount() {
     log.info("Getting client with id");
-    return this.webClientConfig
+    return this.webClientAccount
         .get()
         .uri(uriBuilder -> uriBuilder.path("v1/account/").build())
         .retrieve()
@@ -71,7 +71,7 @@ public class ScheduledTasksService {
 
   public Flux<Account> updateByAccountId(String accountId, BigDecimal newBalance) {
     log.info("Getting client with id");
-    return this.webClientConfig
+    return this.webClientAccount
         .patch()
         .uri(uriBuilder -> uriBuilder.path("v1/account/" + accountId).build())
         .bodyValue(new AccountUpdateDto(newBalance))

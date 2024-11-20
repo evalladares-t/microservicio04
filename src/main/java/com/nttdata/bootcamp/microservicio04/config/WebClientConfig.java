@@ -12,18 +12,33 @@ import org.springframework.web.reactive.function.client.WebClient;
 @Slf4j
 public class WebClientConfig {
 
-  @Value("${application.endpoints.url}")
-  private String urlEndpoint;
+  @Value("${application.endpoints.url.account}")
+  private String urlEndpointAccount;
+
+  @Value("${application.endpoints.url.credit}")
+  private String urlEndpointCredit;
 
   @Bean
-  public WebClient webClientCustomer() {
+  public WebClient webClientAccount() {
     return WebClient.builder()
-        .baseUrl(urlEndpoint)
+        .baseUrl(urlEndpointAccount)
         .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
         .defaultHeader(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE)
         .filter(
             (request, next) ->
                 next.exchange(request).doOnError(e -> log.info("WebClient request error", e)))
         .build();
+  }
+
+  @Bean
+  public WebClient webClientCredit() {
+    return WebClient.builder()
+            .baseUrl(urlEndpointCredit)
+            .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+            .defaultHeader(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE)
+            .filter(
+                    (request, next) ->
+                            next.exchange(request).doOnError(e -> log.info("WebClient request error", e)))
+            .build();
   }
 }

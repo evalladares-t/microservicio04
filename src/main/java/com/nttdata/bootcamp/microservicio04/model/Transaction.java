@@ -22,6 +22,5 @@ public class Transaction {
   private TransactionType transactionType;
   private String accountId;
   private String creditId;
-  private String description;
   private Boolean active;
 }
