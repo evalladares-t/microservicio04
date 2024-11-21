@@ -64,7 +64,7 @@ public class ScheduledTasksService {
     log.info("Getting client with id");
     return this.webClientAccount
         .get()
-        .uri(uriBuilder -> uriBuilder.path("v1/account/").build())
+        .uri(uriBuilder -> uriBuilder.path("v1/accounts/").build())
         .retrieve()
         .bodyToFlux(Account.class);
   }
@@ -73,7 +73,7 @@ public class ScheduledTasksService {
     log.info("Getting client with id");
     return this.webClientAccount
         .patch()
-        .uri(uriBuilder -> uriBuilder.path("v1/account/" + accountId).build())
+        .uri(uriBuilder -> uriBuilder.path("v1/accounts/" + accountId).build())
         .bodyValue(new AccountUpdateDto(newBalance))
         .retrieve()
         .bodyToFlux(Account.class);

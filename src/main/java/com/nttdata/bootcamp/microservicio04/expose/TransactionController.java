@@ -20,7 +20,7 @@ import reactor.core.publisher.Mono;
 
 @RestController
 @Slf4j
-@RequestMapping("api/v1/transaction")
+@RequestMapping("api/v1/transactions")
 public class TransactionController {
 
   private TransactionService transactionService;

@@ -280,7 +280,7 @@ public class TransactionServiceImpl implements TransactionService {
   public Flux<Account> findAccount(String id) {
     return this.webClientAccount
         .get()
-        .uri(uriBuilder -> uriBuilder.path("v1/account/" + id).build())
+        .uri(uriBuilder -> uriBuilder.path("v1/accounts/" + id).build())
         .retrieve()
         .bodyToFlux(Account.class);
   }
@@ -288,7 +288,7 @@ public class TransactionServiceImpl implements TransactionService {
   public Flux<Credit> findCredit(String id) {
     return this.webClientCredit
         .get()
-        .uri(uriBuilder -> uriBuilder.path("v1/credit/" + id).build())
+        .uri(uriBuilder -> uriBuilder.path("v1/credits/" + id).build())
         .retrieve()
         .bodyToFlux(Credit.class);
   }
@@ -297,7 +297,7 @@ public class TransactionServiceImpl implements TransactionService {
     log.info("Update account with id: [{}]", id);
     return this.webClientAccount
             .patch()
-            .uri(uriBuilder -> uriBuilder.path("v1/account/" + id).build())
+            .uri(uriBuilder -> uriBuilder.path("v1/accounts/" + id).build())
             .bodyValue(accountUpdateDto)
             .retrieve()
             .bodyToMono(Account.class);
@@ -307,7 +307,7 @@ public class TransactionServiceImpl implements TransactionService {
     log.info("Update account with id: [{}]", id);
     return this.webClientCredit
             .patch()
-            .uri(uriBuilder -> uriBuilder.path("v1/credit/" + id).build())
+            .uri(uriBuilder -> uriBuilder.path("v1/credits/" + id).build())
             .bodyValue(creditUpdateDto)
             .retrieve()
             .bodyToMono(Credit.class);
