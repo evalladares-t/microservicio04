@@ -41,7 +41,7 @@ public class TransactionController {
     return transactionService.findAll();
   }
 
-  @PostMapping("/")
+  @PostMapping({"", "/"})
   @ResponseStatus(HttpStatus.CREATED)
   public Mono<Transaction> create(@RequestBody Transaction transaction) {
     log.info("Create a transaction in the controller.");
