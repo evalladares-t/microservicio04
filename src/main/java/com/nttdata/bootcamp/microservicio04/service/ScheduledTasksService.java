@@ -25,7 +25,8 @@ public class ScheduledTasksService {
 
   private final TransactionRepository transactionRepository;
 
-  public ScheduledTasksService(TransactionRepository transactionRepository, WebClient webClientAccount) {
+  public ScheduledTasksService(
+      TransactionRepository transactionRepository, WebClient webClientAccount) {
     this.webClientAccount = webClientAccount;
     this.transactionRepository = transactionRepository;
   }

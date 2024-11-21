@@ -34,7 +34,9 @@ public class TransactionServiceImpl implements TransactionService {
   private WebClient webClientCredit;
 
   public TransactionServiceImpl(
-      TransactionRepository transactionRepository, WebClient webClientAccount, WebClient webClientCredit) {
+      TransactionRepository transactionRepository,
+      WebClient webClientAccount,
+      WebClient webClientCredit) {
     this.transactionRepository = transactionRepository;
     this.webClientAccount = webClientAccount;
     this.webClientCredit = webClientCredit;
@@ -82,7 +84,7 @@ public class TransactionServiceImpl implements TransactionService {
         .flatMap(
             credit -> {
               updateCreditAmount(
-                      credit.getId(), credit.getAmountAvailable().add(transaction.getAmount()));
+                  credit.getId(), credit.getAmountAvailable().add(transaction.getAmount()));
               return transactionRepository.insert(transaction);
             })
         // .switchIfEmpty(findByCreditIdService(creditID));
@@ -111,10 +113,8 @@ public class TransactionServiceImpl implements TransactionService {
     if (credit.getActive()
         && ((credit.getAmountAvailable().add(transaction.getAmount())).compareTo(BigDecimal.ZERO)
             >= 0)) {
-      updateCreditAmount(
-              credit.getId(), credit.getAmountAvailable().add(transaction.getAmount()));
+      updateCreditAmount(credit.getId(), credit.getAmountAvailable().add(transaction.getAmount()));
       return transactionRepository.insert(transaction);
-
     }
     return Mono.just(new Transaction());
   }
@@ -296,20 +296,20 @@ public class TransactionServiceImpl implements TransactionService {
   public Mono<Account> updateByAccountId(String id, AccountUpdateDto accountUpdateDto) {
     log.info("Update account with id: [{}]", id);
     return this.webClientAccount
-            .patch()
-            .uri(uriBuilder -> uriBuilder.path("v1/accounts/" + id).build())
-            .bodyValue(accountUpdateDto)
-            .retrieve()
-            .bodyToMono(Account.class);
+        .patch()
+        .uri(uriBuilder -> uriBuilder.path("v1/accounts/" + id).build())
+        .bodyValue(accountUpdateDto)
+        .retrieve()
+        .bodyToMono(Account.class);
   }
 
   public Mono<Credit> updateByCreditId(String id, CreditUpdateDto creditUpdateDto) {
     log.info("Update account with id: [{}]", id);
     return this.webClientCredit
-            .patch()
-            .uri(uriBuilder -> uriBuilder.path("v1/credits/" + id).build())
-            .bodyValue(creditUpdateDto)
-            .retrieve()
-            .bodyToMono(Credit.class);
+        .patch()
+        .uri(uriBuilder -> uriBuilder.path("v1/credits/" + id).build())
+        .bodyValue(creditUpdateDto)
+        .retrieve()
+        .bodyToMono(Credit.class);
   }
 }

@@ -33,12 +33,12 @@ public class WebClientConfig {
   @Bean
   public WebClient webClientCredit() {
     return WebClient.builder()
-            .baseUrl(urlEndpointCredit)
-            .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-            .defaultHeader(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE)
-            .filter(
-                    (request, next) ->
-                            next.exchange(request).doOnError(e -> log.info("WebClient request error", e)))
-            .build();
+        .baseUrl(urlEndpointCredit)
+        .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+        .defaultHeader(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE)
+        .filter(
+            (request, next) ->
+                next.exchange(request).doOnError(e -> log.info("WebClient request error", e)))
+        .build();
   }
 }
