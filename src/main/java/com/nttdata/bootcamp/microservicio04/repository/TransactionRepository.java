@@ -10,7 +10,7 @@ import reactor.core.publisher.Mono;
 @Repository
 public interface TransactionRepository extends ReactiveMongoRepository<Transaction, String> {
 
-  Mono<Long> countByCreatedBetween(LocalDateTime start, LocalDateTime end);
+  Mono<Long> countByCreatedBetweenAndOwnerTransactionIsTrue(LocalDateTime start, LocalDateTime end);
 
   Flux<Transaction> findByAccountId(String id);
 

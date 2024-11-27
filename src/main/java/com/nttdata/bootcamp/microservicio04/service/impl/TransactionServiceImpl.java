@@ -4,6 +4,7 @@ import com.nttdata.bootcamp.microservicio04.model.Account;
 import com.nttdata.bootcamp.microservicio04.model.AccountType;
 import com.nttdata.bootcamp.microservicio04.model.Credit;
 import com.nttdata.bootcamp.microservicio04.model.Transaction;
+import com.nttdata.bootcamp.microservicio04.model.TransactionType;
 import com.nttdata.bootcamp.microservicio04.model.dto.AccountUpdateDto;
 import com.nttdata.bootcamp.microservicio04.model.dto.CreditUpdateDto;
 import com.nttdata.bootcamp.microservicio04.repository.TransactionRepository;
@@ -17,8 +18,10 @@ import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.function.Function;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.util.ReflectionUtils;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -45,17 +48,16 @@ public class TransactionServiceImpl implements TransactionService {
   @Override
   public Mono<Transaction> create(Transaction transaction) {
 
-    if (transaction.getAmount().compareTo(BigDecimal.ZERO) == 0) {
-      log.warn("Transaction amount must be different from zero");
-      return Mono.empty();
+    if (transaction.getAmount().compareTo(BigDecimal.ZERO) >= 0) {
+      transactionNotAllowed(ErrorCode.TRANSACTION_AMOUNT_NOT_ALLOWED);
     }
 
     Map<String, Function<Transaction, Flux<Transaction>>> productProcessors =
         Map.of(
             "accountId",
-            tx -> createTransactionAccount(tx, tx.getAccountId()),
+            tx -> createTransactionAccount(tx),
             "creditId",
-            tx -> createTransactionCredit(tx, tx.getCreditId()));
+            tx -> createTransactionCredit(tx));
     List<Map.Entry<String, Function<Transaction, Flux<Transaction>>>> validProducts =
         productProcessors.entrySet().stream()
             .filter(entry -> isFieldNonNull(transaction, entry.getKey()))
@@ -68,19 +70,51 @@ public class TransactionServiceImpl implements TransactionService {
     return validProducts.get(0).getValue().apply(transaction).next();
   }
 
-  private Flux<Transaction> createTransactionAccount(Transaction transaction, String accountId) {
-    return findAccount(accountId)
-        .flatMap(
-            account -> {
-              setDefaultTransactionProperties(transaction, account);
-              return validateTransactionWithAccount(account, transaction);
-            })
-        // .switchIfEmpty(findByCreditIdService(creditID));
+  private Flux<Transaction> createTransactionAccount(Transaction transaction) {
+    return findAccount(transaction.getAccountId())
+        .flatMap(account -> handleTransactionByType(transaction, account))
         .doOnError(e -> log.error("Error creating transaction: ", e));
   }
 
-  private Flux<Transaction> createTransactionCredit(Transaction transaction, String creditId) {
-    return findCredit(creditId)
+  private Flux<Transaction> handleTransactionByType(Transaction transaction, Account account) {
+    setDefaultTransactionProperties(transaction, account);
+
+    if (TransactionType.BANK_TRANSFER.equals(transaction.getTransactionType())) {
+      return handleBankTransfer(transaction, account);
+    }
+
+    return validateTransactionWithAccount(account, transaction).flux();
+  }
+
+  private Flux<Transaction> handleBankTransfer(Transaction transaction, Account originAccount) {
+
+    transaction.setAmount(transaction.getAmount().negate());
+    Mono<Transaction> originValidation = validateTransactionWithAccount(originAccount, transaction);
+
+    return findAccount(transaction.getDestinationAccountId())
+        .flatMap(
+            destinationAccount -> {
+              Transaction destinationTransaction = createDestinationTransaction(transaction);
+              updateAccountAmount(
+                  destinationAccount.getId(),
+                  destinationAccount.getAmountAvailable().add(destinationTransaction.getAmount()));
+              Mono<Transaction> destinationValidation =
+                  transactionRepository.insert(destinationTransaction);
+
+              return Flux.zip(originValidation, destinationValidation)
+                  .flatMap(tuple -> Flux.just(transaction, destinationTransaction))
+                  .switchIfEmpty(transactionNotAllowed(ErrorCode.TRANSACTION_TYPE_NO_ALLOWED));
+            });
+  }
+
+  private Mono<Transaction> transactionNotAllowed(ErrorCode errorCode) {
+    log.warn("Account type not allowed for this customer");
+    return Mono.error(
+        new OperationNoCompletedException(errorCode.getCode(), errorCode.getMessage()));
+  }
+
+  private Flux<Transaction> createTransactionCredit(Transaction transaction) {
+    return findCredit(transaction.getCreditId())
         .flatMap(
             credit -> {
               updateCreditAmount(
@@ -98,9 +132,9 @@ public class TransactionServiceImpl implements TransactionService {
     LocalDateTime start = mesAnioActual.atDay(1).atStartOfDay();
     LocalDateTime end = mesAnioActual.atEndOfMonth().atTime(23, 59, 59);
 
-    // Contar documentos en el rango del mes y año actuales
+    // Contar documentos en el rango del mes y año actuales y que se dueño de la transaccion
     return transactionRepository
-        .countByCreatedBetween(start, end)
+        .countByCreatedBetweenAndOwnerTransactionIsTrue(start, end)
         .map(count -> transactionLimit > count);
   }
 
@@ -109,66 +143,83 @@ public class TransactionServiceImpl implements TransactionService {
     return Mono.just(dateCompletedNow.getDayOfMonth() == dateAllowedTransaction);
   }
 
-  private Mono<Transaction> validateTransactionWithCredit(Credit credit, Transaction transaction) {
-    if (credit.getActive()
-        && ((credit.getAmountAvailable().add(transaction.getAmount())).compareTo(BigDecimal.ZERO)
-            >= 0)) {
-      updateCreditAmount(credit.getId(), credit.getAmountAvailable().add(transaction.getAmount()));
-      return transactionRepository.insert(transaction);
-    }
-    return Mono.just(new Transaction());
-  }
-
   private Mono<Transaction> validateTransactionWithAccount(
       Account account, Transaction transaction) {
-    String accountType = account.getAccountType().getDescription();
-    if (account.getActive()
-        && ((account.getAmountAvailable().add(transaction.getAmount())).compareTo(BigDecimal.ZERO)
-            >= 0)) {
-      // Si la cuenta es de ahorro
-      if (AccountType.SAVING.getDescription().equals(accountType)) {
-        return isTransactionAccountAvailable(account.getTransactionLimit())
-            .flatMap(
-                allowed -> {
-                  if (allowed) {
-                    updateAccountAmount(
-                        account.getId(), account.getAmountAvailable().add(transaction.getAmount()));
-                    return transactionRepository.insert(transaction);
-                  } else {
-                    log.warn("Transaction not allowed for this account");
-                    return Mono.empty();
-                  }
-                });
-      } else if (AccountType.CURRENT.getDescription().equals(accountType)) {
-        updateAccountAmount(
-            account.getId(), account.getAmountAvailable().add(transaction.getAmount()));
-        return transactionRepository.insert(transaction);
-      } else {
-        return isTransactionAccountAvailable(1)
-            .flatMap(
-                allowed -> {
-                  if (allowed) {
-                    return isDateTransactionAccountAvailable(account.getDateAllowedTransaction())
-                        .flatMap(
-                            allowedDate -> {
-                              if (allowedDate) {
-                                updateAccountAmount(
-                                    account.getId(),
-                                    account.getAmountAvailable().add(transaction.getAmount()));
-                                return transactionRepository.insert(transaction);
-                              } else {
-                                log.warn("Transaction not allowed for this account");
-                                return Mono.empty();
-                              }
-                            });
-                  } else {
-                    log.warn("Transaction not allowed for this account");
-                    return Mono.empty();
-                  }
-                });
-      }
+    if (!account.getActive()) {
+      log.warn("Account is not active");
+      return Mono.empty();
     }
-    return Mono.empty();
+
+    if (!isTransactionAmountValid(account, transaction)) {
+      log.warn("Insufficient funds for transaction");
+      return Mono.empty();
+    }
+
+    if (AccountType.SAVING.equals(account.getAccountType())) {
+      return validateSavingAccount(account, transaction);
+    } else if (AccountType.CURRENT
+        .getDescription()
+        .equals(account.getAccountType().getDescription())) {
+      return processTransaction(account, transaction);
+    } else {
+      return validateOtherAccountTypes(account, transaction);
+    }
+  }
+
+  private boolean isTransactionAmountValid(Account account, Transaction transaction) {
+    return account.getAmountAvailable().add(transaction.getAmount()).compareTo(BigDecimal.ZERO)
+        >= 0;
+  }
+
+  private Mono<Transaction> validateSavingAccount(Account account, Transaction transaction) {
+    return isTransactionAccountAvailable(account.getTransactionLimit())
+        .flatMap(
+            allowed -> {
+              if (allowed) {
+                return processTransaction(account, transaction);
+              } else {
+                log.error("The transaction limit per month was exceeded");
+                return transactionNotAllowed(ErrorCode.TRANSACTION_LIMIT_EXCEEDED);
+              }
+            });
+  }
+
+  private Mono<Transaction> validateOtherAccountTypes(Account account, Transaction transaction) {
+    return isTransactionAccountAvailable(1)
+        .flatMap(
+            allowed -> {
+              if (!allowed) {
+                log.warn("Transaction not allowed for this account");
+                return Mono.empty();
+              }
+
+              return isDateTransactionAccountAvailable(account.getDateAllowedTransaction())
+                  .flatMap(
+                      allowedDate -> {
+                        if (!allowedDate) {
+                          log.warn("Transaction not allowed due to date restrictions");
+                          return Mono.empty();
+                        }
+
+                        return processTransaction(account, transaction);
+                      });
+            });
+  }
+
+  private Mono<Transaction> processTransaction(Account account, Transaction transaction) {
+    updateAccountAmount(account.getId(), account.getAmountAvailable().add(transaction.getAmount()));
+    return transactionRepository.insert(transaction);
+  }
+
+  private Transaction createDestinationTransaction(Transaction transaction) {
+    Transaction destinationTransaction = new Transaction();
+    BeanUtils.copyProperties(transaction, destinationTransaction);
+    destinationTransaction.setId(UUID.randomUUID().toString());
+    destinationTransaction.setAccountId(transaction.getDestinationAccountId());
+    destinationTransaction.setAmount(transaction.getAmount().abs());
+    destinationTransaction.setDestinationAccountId(transaction.getAccountId());
+    destinationTransaction.setOwnerTransaction(false);
+    return destinationTransaction;
   }
 
   public void updateAccountAmount(String accountId, BigDecimal ammount) {
@@ -184,7 +235,7 @@ public class TransactionServiceImpl implements TransactionService {
   }
 
   private void setDefaultTransactionProperties(Transaction transaction, Account account) {
-    transaction.setAccountId(account.getId());
+    transaction.setOwnerTransaction(true);
     transaction.setCreated(LocalDate.now());
     transaction.setActive(true);
   }

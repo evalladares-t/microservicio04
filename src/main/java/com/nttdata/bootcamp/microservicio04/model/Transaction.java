@@ -21,6 +21,8 @@ public class Transaction {
   private LocalDate created;
   private TransactionType transactionType;
   private String accountId;
+  private String destinationAccountId;
+  private Boolean ownerTransaction;
   private String creditId;
   private Boolean active;
 }

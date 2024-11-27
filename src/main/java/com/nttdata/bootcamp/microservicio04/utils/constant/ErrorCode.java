@@ -14,6 +14,8 @@ public enum ErrorCode {
   TRANSACTION_NO_DELETED("404", "The transaction was not deleted"),
   TRANSACTION_NO_COMPLETED("404", "Operación no completada"),
   TRANSACTION_TYPE_NO_ALLOWED("404", "Account type not allowed for this customer"),
+  TRANSACTION_AMOUNT_NOT_ALLOWED("404", "The transaction amount must be greater than 0"),
+  TRANSACTION_LIMIT_EXCEEDED("404", "The transaction limit per month was exceeded"),
 
   INTERNAL_SERVER_ERROR("500", "Internal server error"),
   SERVICE_UNAVAILABLE("503", "Service unavailable");
