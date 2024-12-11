@@ -48,8 +48,8 @@ public class TransactionServiceImpl implements TransactionService {
   @Override
   public Mono<Transaction> create(Transaction transaction) {
 
-    if (transaction.getAmount().compareTo(BigDecimal.ZERO) >= 0) {
-      transactionNotAllowed(ErrorCode.TRANSACTION_AMOUNT_NOT_ALLOWED);
+    if (transaction.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
+      return transactionNotAllowed(ErrorCode.TRANSACTION_AMOUNT_NOT_ALLOWED);
     }
 
     Map<String, Function<Transaction, Flux<Transaction>>> productProcessors =
@@ -82,6 +82,14 @@ public class TransactionServiceImpl implements TransactionService {
     if (TransactionType.BANK_TRANSFER.equals(transaction.getTransactionType())) {
       return handleBankTransfer(transaction, account);
     }
+    if (TransactionType.OPENING_AMOUNT.equals(transaction.getTransactionType())) {
+      transaction.setOwnerTransaction(false);
+      return transactionRepository.insert(transaction).flux();
+    }
+    if (TransactionType.WITHDRAWAL.equals(transaction.getTransactionType())) {
+      transaction.setAmount(transaction.getAmount().negate());
+    }
+
 
     return validateTransactionWithAccount(account, transaction).flux();
   }
@@ -158,8 +166,7 @@ public class TransactionServiceImpl implements TransactionService {
     if (AccountType.SAVING.equals(account.getAccountType())) {
       return validateSavingAccount(account, transaction);
     } else if (AccountType.CURRENT
-        .getDescription()
-        .equals(account.getAccountType().getDescription())) {
+        .equals(account.getAccountType())) {
       return processTransaction(account, transaction);
     } else {
       return validateOtherAccountTypes(account, transaction);
@@ -190,7 +197,7 @@ public class TransactionServiceImpl implements TransactionService {
             allowed -> {
               if (!allowed) {
                 log.warn("Transaction not allowed for this account");
-                return Mono.empty();
+                return transactionNotAllowed(ErrorCode.TRANSACTION_TYPE_NO_ALLOWED);
               }
 
               return isDateTransactionAccountAvailable(account.getDateAllowedTransaction())
@@ -198,7 +205,7 @@ public class TransactionServiceImpl implements TransactionService {
                       allowedDate -> {
                         if (!allowedDate) {
                           log.warn("Transaction not allowed due to date restrictions");
-                          return Mono.empty();
+                          return transactionNotAllowed(ErrorCode.TRANSACTION_NO_COMPLETED);
                         }
 
                         return processTransaction(account, transaction);
